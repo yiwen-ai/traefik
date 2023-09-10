@@ -15,6 +15,7 @@ import (
 	"github.com/traefik/traefik/v2/pkg/config/dynamic"
 	"github.com/traefik/traefik/v2/pkg/log"
 	"github.com/traefik/traefik/v2/pkg/middlewares"
+	"github.com/traefik/traefik/v2/pkg/middlewares/accesslog"
 	"github.com/traefik/traefik/v2/pkg/middlewares/connectionheader"
 	"github.com/traefik/traefik/v2/pkg/tracing"
 	"github.com/vulcand/oxy/v2/forward"
@@ -172,11 +173,16 @@ func (fa *forwardAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	logData := accesslog.GetLogData(req)
+	if logData == nil {
+		logData = &accesslog.LogData{}
+	}
 	for _, headerName := range fa.authResponseHeaders {
 		headerKey := http.CanonicalHeaderKey(headerName)
 		req.Header.Del(headerKey)
 		if len(forwardResponse.Header[headerKey]) > 0 {
 			req.Header[headerKey] = append([]string(nil), forwardResponse.Header[headerKey]...)
+			logData.Core[strings.ToLower(headerKey)] = req.Header.Get(headerKey)
 		}
 	}
 
@@ -190,11 +196,13 @@ func (fa *forwardAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		for headerKey, headerValues := range forwardResponse.Header {
 			if fa.authResponseHeadersRegex.MatchString(headerKey) {
 				req.Header[headerKey] = append([]string(nil), headerValues...)
+				logData.Core[strings.ToLower(headerKey)] = req.Header.Get(headerKey)
 			}
 		}
 	}
 
 	req.RequestURI = req.URL.RequestURI()
+	rw.Header().Add("X-Request-Id", req.Header.Get("X-Request-Id"))
 	fa.next.ServeHTTP(rw, req)
 }
 
