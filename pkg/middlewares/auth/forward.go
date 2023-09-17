@@ -202,6 +202,13 @@ func (fa *forwardAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	req.RequestURI = req.URL.RequestURI()
+	limitKey := req.Header.Get("X-Auth-User")
+	if limitKey == "" {
+		limitKey = req.Header.Get("X-Real-Ip")
+	}
+	req.Header.Set("X-Ratelimit-Key", limitKey)
+	logData.Core["x-ratelimit-key"] = limitKey
+
 	rw.Header().Add("X-Request-Id", req.Header.Get("X-Request-Id"))
 	fa.next.ServeHTTP(rw, req)
 }
